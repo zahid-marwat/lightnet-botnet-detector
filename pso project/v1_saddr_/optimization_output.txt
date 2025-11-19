@@ -1,0 +1,15 @@
+Iteration 01/30: Best AUC = 0.9898, Mean AUC = 0.9717, Time: 536.70s
+Iteration 02/30: Best AUC = 0.9898, Mean AUC = 0.9676, Time: 492.01s
+Iteration 03/30: Best AUC = 0.9898, Mean AUC = 0.9695, Time: 419.15s
+Iteration 04/30: Best AUC = 0.9898, Mean AUC = 0.9739, Time: 599.95s
+Iteration 05/30: Best AUC = 0.9926, Mean AUC = 0.9806, Time: 982.89s
+Iteration 06/30: Best AUC = 0.9935, Mean AUC = 0.9835, Time: 835.59s
+Iteration 07/30: Best AUC = 0.9935, Mean AUC = 0.9831, Time: 944.51s
+Iteration 08/30: Best AUC = 0.9936, Mean AUC = 0.9837, Time: 1278.68s
+Iteration 09/30: Best AUC = 0.9936, Mean AUC = 0.9848, Time: 1570.05s
+Iteration 10/30: Best AUC = 0.9936, Mean AUC = 0.9884, Time: 2936.81s
+Iteration 11/30: Best AUC = 0.9937, Mean AUC = 0.9896, Time: 2486.48s
+Iteration 12/30: Best AUC = 0.9938, Mean AUC = 0.9901, Time: 2330.29s
+Iteration 13/30: Best AUC = 0.9938, Mean AUC = 0.9919, Time: 2826.51s
+
+

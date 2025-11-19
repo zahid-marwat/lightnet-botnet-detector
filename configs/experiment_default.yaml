@@ -1,0 +1,49 @@
+data:
+  raw_glob: "data/raw/*.csv"
+  processed_file: "data/processed/iot_pot_balanced.parquet"
+  label_column: "attack_label"
+  categorical_features:
+    - source_ip
+    - destination_ip
+    - protocol
+    - tcp_flags
+  numeric_features:
+    - source_port
+    - destination_port
+    - packet_size
+    - flow_duration
+    - payload
+    - window_size
+    - ttl
+    - packet_count
+  sample_frac: 0.02
+  chunk_size: 500000
+
+features:
+  top_k: 18
+  importance_threshold: 0.001
+  variance_threshold: 0.0
+
+search_space:
+  num_leaves: [32, 512]
+  max_depth: [4, 16]
+  learning_rate: [0.01, 0.3]
+  feature_fraction: [0.5, 1.0]
+  bagging_fraction: [0.5, 1.0]
+  min_data_in_leaf: [16, 512]
+
+training:
+  test_size: 0.2
+  val_size: 0.1
+  random_state: 42
+  n_particles: 16
+  n_iterations: 25
+  cv_folds: 3
+  scoring: "f1_macro"
+  early_stopping_rounds: 50
+
+paths:
+  artifacts_dir: "artifacts"
+  models_dir: "artifacts/models"
+  metrics_dir: "artifacts/metrics"
+  logs_dir: "logs"
