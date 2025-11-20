@@ -48,6 +48,11 @@ class TrainingConfig:
     cv_folds: int
     scoring: str
     early_stopping_rounds: int
+    n_estimators: int = 800
+    use_gpu: bool = False
+    gpu_platform_id: int = 0
+    gpu_device_id: int = 0
+    show_progress: bool = False
 
 
 @dataclass

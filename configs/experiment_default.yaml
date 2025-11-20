@@ -41,6 +41,11 @@ training:
   cv_folds: 3
   scoring: "f1_macro"
   early_stopping_rounds: 50
+  n_estimators: 800
+  use_gpu: false
+  gpu_platform_id: 0
+  gpu_device_id: 0
+  show_progress: false
 
 paths:
   artifacts_dir: "artifacts"

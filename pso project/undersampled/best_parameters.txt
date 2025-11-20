@@ -1,3 +1,0 @@
-Hidden Layer Neurons: 200
-Learning Rate: 0.006454
-Regularization Alpha: 0.000100

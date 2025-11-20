@@ -2,11 +2,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from datetime import datetime
+from pathlib import Path
+from typing import Callable, Dict, List, Tuple
 
 import numpy as np
 from lightgbm import LGBMClassifier
+from lightgbm.callback import CallbackEnv
 from sklearn.model_selection import cross_val_score
+from tqdm import tqdm
 
 from src.config import ProjectConfig
 from src.utils.logger import setup_logger
@@ -37,6 +41,10 @@ class PSOLightGBMTuner:
         self.inertia = inertia
         self.cognitive_coef = cognitive_coef
         self.social_coef = social_coef
+        self.use_gpu = config.training.use_gpu
+        self.gpu_platform_id = config.training.gpu_platform_id
+        self.gpu_device_id = config.training.gpu_device_id
+        self.show_progress = config.training.show_progress
         self.logger = setup_logger(log_dir=config.paths.logs_dir)
         self.rng = np.random.default_rng(config.training.random_state)
         self.param_keys = [
@@ -50,6 +58,7 @@ class PSOLightGBMTuner:
         self.bounds = self._build_bounds()
         self.best_params_: Dict[str, float | int] | None = None
         self.best_estimator_: LGBMClassifier | None = None
+        self.checkpoint_paths_: List[Path] = []
 
     def _build_bounds(self) -> np.ndarray:
         search_space = self.config.search_space
@@ -108,27 +117,56 @@ class PSOLightGBMTuner:
         params.update(
             {
                 "objective": objective,
-                "n_estimators": 800,
-                "subsample": params["bagging_fraction"],
-                "colsample_bytree": params["feature_fraction"],
+                "n_estimators": self.config.training.n_estimators,
                 "random_state": self.config.training.random_state,
-                "n_jobs": -1,
+                # Reduce CPU contention when GPU acceleration is enabled.
+                "n_jobs": 1 if self.use_gpu else -1,
                 "class_weight": "balanced",
+                "verbosity": -1,
                 **extra_args,
             }
         )
+        params["min_child_samples"] = params["min_data_in_leaf"]
+        if self.use_gpu:
+            params.update(
+                {
+                    "device_type": "gpu",
+                    "gpu_platform_id": self.gpu_platform_id,
+                    "gpu_device_id": self.gpu_device_id,
+                    "gpu_use_dp": False,
+                    "max_bin": 255,
+                    "bin_construct_sample_cnt": 2_000_000,
+                    "force_col_wise": True,
+                }
+            )
+            params["subsample_for_bin"] = params["bin_construct_sample_cnt"]
         return params
+
+    def _make_checkpoint_callback(self, prefix: str) -> Callable[[CallbackEnv], None]:
+        save_dir = self.config.paths.models_path
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        def _callback(env: CallbackEnv) -> None:
+            iteration = env.iteration + 1
+            filename = f"{prefix}_epoch{iteration:04d}.txt"
+            destination = save_dir / filename
+            env.model.save_model(str(destination), num_iteration=iteration)
+            self.checkpoint_paths_.append(destination)
+
+        _callback.order = 10
+        return _callback
 
     def _evaluate_particle(self, X, y, vector: np.ndarray) -> float:
         params = self._vector_to_params(vector, n_classes=len(np.unique(y)))
         model = LGBMClassifier(**params)
+        cv_n_jobs = 1 if self.use_gpu else -1
         scores = cross_val_score(
             model,
             X,
             y,
             cv=self.config.training.cv_folds,
             scoring=self.scoring_name,
-            n_jobs=-1,
+            n_jobs=cv_n_jobs,
         )
         return float(scores.mean())
 
@@ -138,7 +176,11 @@ class PSOLightGBMTuner:
         low = self.bounds[:, 0]
         high = self.bounds[:, 1]
 
-        for iteration in range(iterations):
+        iterator = range(iterations)
+        if self.show_progress:
+            iterator = tqdm(iterator, desc="PSO tuning", unit="iter")
+
+        for iteration in iterator:
             for idx in range(self.config.training.n_particles):
                 vector = state.positions[idx]
                 score = self._evaluate_particle(X, y, vector)
@@ -169,11 +211,32 @@ class PSOLightGBMTuner:
         self.logger.info("Best params: %s", self.best_params_)
         return self.best_params_
 
-    def train_best_model(self, X, y) -> LGBMClassifier:
+    def train_best_model(
+        self,
+        X,
+        y,
+        *,
+        n_estimators: int | None = None,
+        save_each_epoch: bool = False,
+        checkpoint_prefix: str | None = None,
+    ) -> LGBMClassifier:
         if self.best_params_ is None:
             raise RuntimeError("fit() must be called before training the final model")
-        model = LGBMClassifier(**self.best_params_)
-        model.fit(X, y)
+
+        params = self.best_params_.copy()
+        if n_estimators is not None:
+            params["n_estimators"] = n_estimators
+
+        model = LGBMClassifier(**params)
+        callbacks = []
+        if save_each_epoch:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            prefix = checkpoint_prefix or f"pso_lightgbm_{timestamp}"
+            self.checkpoint_paths_ = []
+            callbacks.append(self._make_checkpoint_callback(prefix))
+
+        fit_kwargs = {"callbacks": callbacks} if callbacks else {}
+        model.fit(X, y, **fit_kwargs)
         self.best_estimator_ = model
         return model
 
